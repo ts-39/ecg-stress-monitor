@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ECG Monitor – Polar H10</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+  /* ── Reset & base ── */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #f8fafc;
+    color: #0f172a;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 28px 20px;
+    min-height: 100vh;
+  }
+  h1 {
+    color: #0f172a;
+    font-size: 1.4rem;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin-bottom: 20px;
+  }
+
+  /* ── Status bar ── */
+  #status-bar {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 16px;
+    font-size: 0.82rem;
+  }
+  .status-item { display: flex; align-items: center; gap: 8px; color: #64748b; }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #cbd5e1; flex-shrink: 0;
+    transition: background 0.4s, box-shadow 0.4s;
+  }
+  .dot.green { background: #10b981; box-shadow: 0 0 6px rgba(16,185,129,0.45); }
+  .dot.red   { background: #ef4444; }
+  .dot.amber { background: #f59e0b; box-shadow: 0 0 6px rgba(245,158,11,0.45); }
+
+  /* ── ECG canvas ── */
+  #ecg-wrap {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    width: 100%;
+    max-width: 1300px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  }
+  canvas { display: block; width: 100%; }
+
+  /* ── Connect button ── */
+  #connect-btn {
+    margin-top: 16px;
+    padding: 9px 28px;
+    background: #6366f1;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s;
+    box-shadow: 0 2px 6px rgba(99,102,241,0.3);
+  }
+  #connect-btn:hover:not(:disabled) { background: #4f46e5; }
+  #connect-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* ── Info bar ── */
+  #info-bar {
+    margin-top: 10px;
+    font-size: 0.76rem;
+    color: #94a3b8;
+    display: flex;
+    gap: 24px;
+    align-items: center;
+  }
+  #info-bar span { white-space: nowrap; }
+  #lock-btn {
+    padding: 3px 12px;
+    background: transparent;
+    color: #94a3b8;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.74rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  #lock-btn:hover { color: #6366f1; border-color: #6366f1; }
+  #lock-btn.locked { color: #f59e0b; border-color: #f59e0b; }
+
+  /* ── RRI panel ── */
+  #rri-panel {
+    display: flex;
+    gap: 36px;
+    align-items: baseline;
+    margin-bottom: 12px;
+    padding: 14px 24px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 1300px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  #rri-value {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -1px;
+    font-variant-numeric: tabular-nums;
+  }
+  #hr-value {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #6366f1;
+  }
+  #rri-history {
+    font-size: 0.78rem;
+    color: #94a3b8;
+    flex: 1;
+    text-align: right;
+  }
+  #rmssd-value {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #10b981;
+    letter-spacing: -1px;
+    font-variant-numeric: tabular-nums;
+  }
+  #rmssd-label {
+    font-size: 0.76rem;
+    color: #94a3b8;
+    align-self: flex-end;
+    padding-bottom: 7px;
+  }
+
+  /* ── Calibration ── */
+  #calibration-section {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-top: 12px;
+    margin-bottom: 4px;
+    width: 100%;
+    max-width: 1300px;
+  }
+  #calibrate-btn {
+    padding: 9px 22px;
+    background: #fff;
+    color: #f59e0b;
+    border: 1.5px solid #f59e0b;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+  }
+  #calibrate-btn:hover:not(:disabled) { background: #fffbeb; }
+  #calibrate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  #cal-status {
+    font-size: 0.84rem;
+    color: #94a3b8;
+  }
+  #cal-status.active  { color: #f59e0b; font-weight: 600; }
+  #cal-status.done    { color: #10b981; font-weight: 600; }
+  #cal-status.error   { color: #ef4444; }
+  #cal-bar-wrap {
+    flex: 1;
+    height: 5px;
+    background: #f1f5f9;
+    border-radius: 3px;
+    overflow: hidden;
+    display: none;
+  }
+  #cal-bar {
+    height: 100%;
+    width: 0%;
+    background: #f59e0b;
+    transition: width 0.5s linear;
+  }
+
+  /* ── Stress panel ── */
+  #stress-panel {
+    display: flex;
+    gap: 28px;
+    align-items: baseline;
+    margin-bottom: 12px;
+    padding: 14px 24px;
+    background: #fff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 1300px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    transition: border-color 0.5s;
+  }
+  #stress-panel.calm   { border-color: rgba(16,185,129,0.4); }
+  #stress-panel.stress { border-color: rgba(239,68,68,0.4); }
+  #stress-state {
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: -1px;
+    color: #cbd5e1;
+    transition: color 0.5s;
+  }
+  #stress-state.calm   { color: #10b981; }
+  #stress-state.stress { color: #ef4444; }
+  #stress-prob-val {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #94a3b8;
+    font-variant-numeric: tabular-nums;
+    transition: color 0.5s;
+  }
+  #stress-prob-val.calm   { color: #10b981; }
+  #stress-prob-val.stress { color: #ef4444; }
+  #stress-hint {
+    font-size: 0.78rem;
+    color: #94a3b8;
+    align-self: flex-end;
+    padding-bottom: 7px;
+  }
+
+  /* ── Features panel ── */
+  #features-panel {
+    width: 100%;
+    max-width: 1300px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .features-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #64748b;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .feat-row {
+    display: grid;
+    grid-template-columns: 90px 110px 1fr 54px;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 20px;
+    border-bottom: 1px solid #f8fafc;
+  }
+  .feat-row:last-child { border-bottom: none; }
+  .feat-name { color: #64748b; font-size: 0.84rem; font-weight: 500; }
+  .feat-val  {
+    color: #0f172a;
+    text-align: right;
+    font-size: 0.92rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .feat-bar-wrap {
+    position: relative;
+    height: 5px;
+    background: #f1f5f9;
+    border-radius: 3px;
+  }
+  .feat-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: #e2e8f0;
+    transition: width 0.5s ease, background 0.5s;
+    max-width: 100%;
+  }
+  .feat-baseline-tick {
+    position: absolute;
+    left: 50%;
+    top: -3px;
+    width: 1px;
+    height: 11px;
+    background: #cbd5e1;
+  }
+  .feat-norm {
+    color: #94a3b8;
+    text-align: right;
+    font-size: 0.78rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    transition: color 0.5s;
+  }
+  #features-detail summary {
+    padding: 8px 20px;
+    color: #94a3b8;
+    cursor: pointer;
+    font-size: 0.76rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    list-style: none;
+    border-top: 1px solid #f1f5f9;
+  }
+  #features-detail summary::-webkit-details-marker { display: none; }
+  #features-detail summary:hover { color: #64748b; }
+  #features-detail[open] summary { color: #64748b; border-bottom: 1px solid #f1f5f9; }
+  #features-detail summary::before {
+    content: '▶  ';
+    font-size: 0.60rem;
+    vertical-align: middle;
+  }
+  #features-detail[open] summary::before { content: '▼  '; }
+
+  /* ── Stress Timeline ── */
+  #timeline-panel {
+    width: 100%;
+    max-width: 1300px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    margin-top: 12px;
+    overflow: visible;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .timeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #64748b;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  #timeline-canvas-wrap { position: relative; }
+  #stress-timeline { display: block; width: 100%; }
+  #event-detail-card {
+    display: none;
+    position: absolute;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px 16px;
+    min-width: 220px;
+    max-width: 300px;
+    z-index: 10;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.12);
+    pointer-events: auto;
+  }
+  #ed-close {
+    position: absolute; top: 8px; right: 10px;
+    background: transparent; border: none;
+    color: #94a3b8; cursor: pointer; font-size: 0.85rem; line-height: 1;
+  }
+  #ed-close:hover { color: #64748b; }
+  #ed-title {
+    color: #0f172a; font-size: 0.92rem; font-weight: 700;
+    letter-spacing: 0; margin-bottom: 3px; padding-right: 18px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #ed-time { color: #94a3b8; font-size: 0.76rem; margin-bottom: 10px; }
+  .ed-stats-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;
+  }
+  .ed-stat { display: flex; flex-direction: column; gap: 2px; }
+  .ed-label { color: #94a3b8; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .ed-val   { color: #0f172a; font-size: 0.92rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  #ed-trend-canvas {
+    display: block; width: 100%; height: 50px;
+    border-top: 1px solid #f1f5f9; margin-top: 6px;
+  }
+  #gcal-connect-bar {
+    padding: 10px 16px;
+    border-top: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  #gcal-connect-btn {
+    padding: 6px 16px;
+    background: #fff; color: #6366f1; border: 1.5px solid #6366f1;
+    border-radius: 7px; font-family: inherit;
+    font-size: 0.84rem; font-weight: 600; cursor: pointer;
+    white-space: nowrap; transition: background 0.2s;
+  }
+  #gcal-connect-btn:hover { background: #f5f3ff; }
+  #gcal-connect-hint { color: #94a3b8; font-size: 0.76rem; }
+  #stress-event {
+    font-size: 0.80rem; color: #6366f1;
+    align-self: flex-end; padding-bottom: 7px;
+    flex: 1; text-align: center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+</style>
+</head>
+<body>
+
+<h1>ECG Monitor</h1>
+
+<div id="status-bar">
+  <div class="status-item">
+    <div class="dot" id="ws-dot"></div>
+    <span id="ws-label">WebSocket: Connecting…</span>
+  </div>
+  <div class="status-item">
+    <div class="dot" id="ble-dot"></div>
+    <span id="ble-label">Polar H10: Checking…</span>
+  </div>
+  <div class="status-item">
+    <div class="dot" id="gcal-dot"></div>
+    <span id="gcal-label">Google Calendar: Not connected</span>
+  </div>
+</div>
+
+<button id="connect-btn" onclick="connectBle()">Connect to Polar H10</button>
+
+<div id="calibration-section">
+  <button id="calibrate-btn" onclick="startCalibration()" disabled>Start Calibration</button>
+  <span id="cal-status">Connect Polar H10 first</span>
+  <div id="cal-bar-wrap"><div id="cal-bar"></div></div>
+</div>
+
+<div id="stress-panel">
+  <span id="stress-state">STRESS: --</span>
+  <span id="stress-prob-val">--</span>
+  <span id="stress-event"></span>
+  <span id="stress-hint">Available after calibration</span>
+</div>
+
+<div id="features-panel">
+  <div class="features-header">
+    <span>HRV Features</span>
+    <span id="features-ts">--</span>
+  </div>
+  <div id="features-main"></div>
+  <details id="features-detail">
+    <summary>Details (7 items)</summary>
+    <div id="features-detail-rows"></div>
+  </details>
+</div>
+
+<div id="rri-panel">
+  <span id="rri-value">RRI: -- ms</span>
+  <span id="hr-value">HR: -- bpm</span>
+  <span id="rmssd-value">RMSSD: -- ms</span>
+  <span id="rmssd-label">Last 30 beats</span>
+  <span id="rri-history">--</span>
+</div>
+
+<div id="ecg-wrap"><canvas id="ecg"></canvas></div>
+
+<div id="timeline-panel">
+  <div class="timeline-header">
+    <span>Stress Timeline</span>
+    <span id="timeline-cal-label">--</span>
+  </div>
+  <div id="timeline-canvas-wrap">
+    <canvas id="stress-timeline"></canvas>
+    <div id="event-detail-card">
+      <button id="ed-close" onclick="closeEventCard()">✕</button>
+      <div id="ed-title">--</div>
+      <div id="ed-time">--</div>
+      <div class="ed-stats-grid">
+        <div class="ed-stat"><span class="ed-label">Avg Stress</span><span class="ed-val" id="ed-avg-stress">--</span></div>
+        <div class="ed-stat"><span class="ed-label">Peak Stress</span><span class="ed-val" id="ed-peak-stress">--</span></div>
+        <div class="ed-stat"><span class="ed-label">Avg HR</span><span class="ed-val" id="ed-avg-hr">--</span></div>
+        <div class="ed-stat"><span class="ed-label">Avg RMSSD</span><span class="ed-val" id="ed-avg-rmssd">--</span></div>
+      </div>
+      <canvas id="ed-trend-canvas"></canvas>
+    </div>
+  </div>
+  <div id="gcal-connect-bar">
+    <button id="gcal-connect-btn" onclick="connectGoogleCalendar()">Connect Google Calendar</button>
+    <span id="gcal-connect-hint">Connect Google Calendar to overlay events on the chart</span>
+  </div>
+</div>
+
+<div id="info-bar">
+  <span>130 Hz · ECG</span>
+  <span id="stat-samples">samples: 0</span>
+  <span id="stat-fps">fps: --</span>
+  <span id="stat-range">range: --</span>
+  <button id="lock-btn" onclick="toggleLock()">Lock Range</button>
+</div>
+
+<script>
+// ─── Canvas setup ────────────────────────────────────────────────────────────
+const canvas = document.getElementById('ecg');
+const ctx    = canvas.getContext('2d');
+
+const W = Math.min(window.innerWidth - 32, 1300);
+const H = 320;
+canvas.width  = W;
+canvas.height = H;
+
+// ─── Ring buffer ─────────────────────────────────────────────────────────────
+// Show 5 seconds of ECG. Each sample is stretched to W/N pixels wide.
+const N   = 130 * 5;  // 650 samples = 5 seconds at 130 Hz
+const buf = new Float32Array(N);
+let head   = 0;   // index where the NEXT sample will be written
+let filled = 0;   // total written, capped at N
+
+// ─── R-peak / RRI state ──────────────────────────────────────────────────────
+const rPeaks     = [];  // {idx: ringBufIndex}
+const rriHistory = [];  // last 5 RRI values (for trend display)
+const rriBuffer  = [];  // last 30 RRI values (for RMSSD)
+const RMSSD_WIN  = 30;
+
+function computeRMSSD(rris) {
+  if (rris.length < 2) return null;
+  let sumSq = 0;
+  for (let i = 1; i < rris.length; i++) {
+    const diff = rris[i] - rris[i - 1];
+    sumSq += diff * diff;
+  }
+  return Math.sqrt(sumSq / (rris.length - 1));
+}
+
+// Detect R-peaks directly from ECG ring buffer.
+// Runs on every new batch of samples — independent of PPI stream timing.
+function detectRPeaks() {
+  if (rangeBuffer.length < 130 * 5) return;  // wait until range is calibrated
+
+  const threshold = ecgMin + (ecgMax - ecgMin) * 0.55;
+  const minDist   = 39;   // ~300 ms at 130 Hz
+  const start     = filled < N ? 0 : head;
+  const newPeaks  = [];
+  let   lastI     = -minDist;
+
+  for (let i = 1; i < filled - 1; i++) {
+    const idxPrev = (start + i - 1) % N;
+    const idxCurr = (start + i    ) % N;
+    const idxNext = (start + i + 1) % N;
+    const v = buf[idxCurr];
+
+    if (v > threshold && v > buf[idxPrev] && v > buf[idxNext] && i - lastI >= minDist) {
+      newPeaks.push(idxCurr);
+      lastI = i;
+    }
+  }
+
+  rPeaks.length = 0;
+  for (const idx of newPeaks) rPeaks.push({ idx });
+}
+
+function onPPI(values) {
+  for (const ppi_ms of values) {
+    rriHistory.push(ppi_ms);
+    if (rriHistory.length > 5) rriHistory.shift();
+
+    rriBuffer.push(ppi_ms);
+    if (rriBuffer.length > RMSSD_WIN) rriBuffer.shift();
+
+    document.getElementById('rri-value').textContent = `RRI: ${ppi_ms} ms`;
+    const hr = Math.round(60000 / ppi_ms);
+    document.getElementById('hr-value').textContent = `HR: ${hr} bpm`;
+    document.getElementById('rri-history').textContent =
+      'last 5: ' + rriHistory.map(v => `${v}`).join(' · ') + ' ms';
+
+    const rmssd = computeRMSSD(rriBuffer);
+    const rmssdEl = document.getElementById('rmssd-value');
+    if (rmssd === null || rriBuffer.length < RMSSD_WIN) {
+      rmssdEl.textContent = `RMSSD: -- ms`;
+      document.getElementById('rmssd-label').textContent =
+        rriBuffer.length < RMSSD_WIN
+          ? `Last 30 beats (${rriBuffer.length}/30)`
+          : 'Last 30 beats';
+    } else {
+      rmssdEl.textContent = `RMSSD: ${Math.round(rmssd)} ms`;
+      document.getElementById('rmssd-label').textContent = 'Last 30 beats';
+    }
+  }
+}
+
+function pushSamples(samples) {
+  for (const v of samples) {
+    // Display ring buffer
+    buf[head] = v;
+    head = (head + 1) % N;
+    if (filled < N) filled++;
+    totalSamples++;
+
+    // Range buffer: skip first 5 seconds, keep last 30 seconds
+    if (totalSamples > SKIP_SAMPLES) {
+      rangeBuffer.push(v);
+      if (rangeBuffer.length > RANGE_WIN) rangeBuffer.shift();
+    }
+  }
+
+  // Update range every 5 seconds
+  const now = performance.now();
+  if (now - lastRangeUpdate > 5000) {
+    updateRange();
+    lastRangeUpdate = now;
+  }
+
+  detectRPeaks();
+}
+
+// ─── Drawing ─────────────────────────────────────────────────────────────────
+// Display range
+let ecgMin = -1000, ecgMax = 5000;
+let rangeLocked = false;
+let lastRangeUpdate = 0;
+
+// Separate buffer for range calculation: only collects data after first 5 seconds
+const SKIP_SAMPLES  = 130 * 5;   // ignore first 5 s
+const RANGE_WIN     = 130 * 30;  // use up to last 30 s
+const rangeBuffer   = [];
+
+function toY(v) { return H - ((v - ecgMin) / (ecgMax - ecgMin)) * H; }
+
+function updateRange() {
+  if (rangeLocked) return;
+  if (rangeBuffer.length < 130 * 5) return;  // need at least 5 s of clean data
+
+  const sorted = Float32Array.from(rangeBuffer).sort();
+  const n   = sorted.length;
+  const p1  = sorted[Math.floor(n * 0.01)];
+  const p99 = sorted[Math.floor(n * 0.99)];
+  const pad = (p99 - p1) * 0.4;  // generous padding so waveform isn't cramped
+  ecgMin = p1  - pad;
+  ecgMax = p99 + pad;
+}
+
+let frameCount = 0, lastFpsMark = performance.now();
+
+function drawGrid() {
+  const major = 26;  // ~0.2 s at 130 Hz  (like ECG large square)
+  const minor = 5;
+
+  ctx.lineWidth   = 0.4;
+  ctx.strokeStyle = '#eff2f7';
+  ctx.beginPath();
+  for (let x = 0; x < W; x += minor) { ctx.moveTo(x+.5, 0); ctx.lineTo(x+.5, H); }
+  for (let y = 0; y < H; y += minor) { ctx.moveTo(0, y+.5); ctx.lineTo(W, y+.5); }
+  ctx.stroke();
+
+  ctx.lineWidth   = 0.7;
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.beginPath();
+  for (let x = 0; x < W; x += major) { ctx.moveTo(x+.5, 0); ctx.lineTo(x+.5, H); }
+  for (let y = 0; y < H; y += major) { ctx.moveTo(0, y+.5); ctx.lineTo(W, y+.5); }
+  ctx.stroke();
+}
+
+function draw() {
+  // FPS counter
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFpsMark >= 1000) {
+    document.getElementById('stat-fps').textContent = `fps: ${frameCount}`;
+    frameCount = 0;
+    lastFpsMark = now;
+  }
+
+  // Background
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(0, 0, W, H);
+  drawGrid();
+
+  if (filled === 0) {
+    ctx.fillStyle = '#94a3b866';
+    ctx.font = '14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Waiting for ECG data…', W / 2, H / 2);
+    requestAnimationFrame(draw);
+    return;
+  }
+
+  // ── ECG line (buf[i] → x=i, direct ring buffer plot) ────────────────────
+  // When filling: draw buf[0..filled-1] left-to-right (data grows rightward)
+  // When full:    draw buf[0..N-1] directly; head = seam between old and new
+  ctx.beginPath();
+  ctx.strokeStyle = '#6366f1';
+  ctx.lineWidth   = 1.5;
+  ctx.lineJoin    = 'round';
+
+  for (let i = 0; i < filled; i++) {
+    const x = (i / N) * W;
+    const y = toY(buf[i]);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // ── R-peak markers ───────────────────────────────────────────────────────
+  for (const peak of rPeaks) {
+    const x = (peak.idx / N) * W;
+    const y = toY(buf[peak.idx]);
+    // Skip if behind the erase band (near cursor seam)
+    const cx = (head / N) * W;
+    if (filled === N && x >= cx && x <= cx + 22) continue;
+
+    // Triangle marker above peak
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.moveTo(x,     y - 5);
+    ctx.lineTo(x - 5, y - 15);
+    ctx.lineTo(x + 5, y - 15);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // ── Sweep cursor ──────────────────────────────────────────────────────────
+  // head is where the next write goes = exact seam between newest (left) and oldest (right)
+  if (filled === N) {
+    const cx = (head / N) * W;
+
+    // Blank band to the RIGHT of cursor hides the old-new discontinuity
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(cx, 0, 20, H);
+
+    // Thin bright cursor line at the seam
+    ctx.strokeStyle = '#6366f144';
+    ctx.lineWidth   = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx, 0); ctx.lineTo(cx, H);
+    ctx.stroke();
+  }
+
+  const remaining = Math.ceil((SKIP_SAMPLES + 130*5 - totalSamples) / 130);
+  const rangeLabel = rangeLocked
+    ? `range: ${Math.round(ecgMin)} – ${Math.round(ecgMax)} µV 🔒`
+    : remaining > 0
+      ? `range: adjusting… (${remaining}s)`
+      : `range: ${Math.round(ecgMin)} – ${Math.round(ecgMax)} µV`;
+  document.getElementById('stat-range').textContent = rangeLabel;
+
+  requestAnimationFrame(draw);
+}
+
+// ─── WebSocket ───────────────────────────────────────────────────────────────
+let totalSamples = 0;  // incremented inside pushSamples
+
+function connect() {
+  const ws      = new WebSocket(`ws://${location.host}/ws/ecg`);
+  const wsDot   = document.getElementById('ws-dot');
+  const wsLabel = document.getElementById('ws-label');
+
+  ws.onopen = () => {
+    wsDot.className  = 'dot green';
+    wsLabel.textContent = 'WebSocket: Connected';
+  };
+  ws.onclose = () => {
+    wsDot.className  = 'dot red';
+    wsLabel.textContent = 'WebSocket: Disconnected (reconnecting…)';
+    setTimeout(connect, 3000);
+  };
+  ws.onerror = () => { wsDot.className = 'dot red'; };
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'ecg') {
+      pushSamples(msg.samples);
+      document.getElementById('stat-samples').textContent =
+        `samples: ${totalSamples.toLocaleString()}`;
+    } else if (msg.type === 'ppi') {
+      onPPI(msg.values);
+    } else if (msg.type === 'stress') {
+      onStress(msg);
+    } else if (msg.type === 'features') {
+      updateFeatures(msg.raw, null);
+    }
+  };
+}
+
+// ─── Lock range ──────────────────────────────────────────────────────────────
+function toggleLock() {
+  rangeLocked = !rangeLocked;
+  const btn = document.getElementById('lock-btn');
+  btn.textContent  = rangeLocked ? 'Unlock Range' : 'Lock Range';
+  btn.className    = rangeLocked ? 'locked' : '';
+}
+
+// ─── HRV Features panel ──────────────────────────────────────────────────────
+
+// Feature metadata: index matches extract_features() return order
+const FEAT_META = [
+  { name: "Mean Freq",  unit: "Hz",  scale: 1,    dec: 3 }, // 0
+  { name: "Std Freq",   unit: "Hz",  scale: 1,    dec: 3 }, // 1
+  { name: "TINN",       unit: "ms",  scale: 1000, dec: 1 }, // 2
+  { name: "HRV Index",  unit: "",    scale: 1,    dec: 2 }, // 3
+  { name: "NN50",       unit: "",    scale: 1,    dec: 0 }, // 4
+  { name: "pNN50",      unit: "%",   scale: 100,  dec: 1 }, // 5
+  { name: "Mean RRI",   unit: "ms",  scale: 1000, dec: 0 }, // 6
+  { name: "SDNN",       unit: "ms",  scale: 1000, dec: 1 }, // 7
+  { name: "RMSSD",      unit: "ms",  scale: 1000, dec: 1 }, // 8
+  { name: "FFT Mean",   unit: "Hz",  scale: 1,    dec: 3 }, // 9
+  { name: "FFT Std",    unit: "Hz",  scale: 1,    dec: 3 }, // 10
+  { name: "Total PSD",  unit: "",    scale: 1,    dec: 4 }, // 11
+  { name: "HF Power",   unit: "",    scale: 1,    dec: 5 }, // 12
+  { name: "LF/HF",      unit: "",    scale: 1,    dec: 2 }, // 13
+  { name: "SD2",        unit: "ms",  scale: 1000, dec: 1 }, // 14
+];
+
+const MAIN_ORDER   = [6, 7, 8, 4, 5, 14, 13, 12]; // user's 8 primary features
+const DETAIL_ORDER = [0, 1, 2, 3, 9, 10, 11];      // remaining 7
+
+function buildFeatRow(idx) {
+  const m = FEAT_META[idx];
+  const row = document.createElement('div');
+  row.className = 'feat-row';
+  row.innerHTML = `
+    <span class="feat-name">${m.name}</span>
+    <span class="feat-val" id="fv-${idx}">--${m.unit ? ' ' + m.unit : ''}</span>
+    <div class="feat-bar-wrap">
+      <div class="feat-baseline-tick"></div>
+      <div class="feat-bar-fill" id="fb-${idx}"></div>
+    </div>
+    <span class="feat-norm" id="fn-${idx}">--</span>`;
+  return row;
+}
+
+function initFeaturesPanel() {
+  const main   = document.getElementById('features-main');
+  const detail = document.getElementById('features-detail-rows');
+  MAIN_ORDER.forEach(i   => main.appendChild(buildFeatRow(i)));
+  DETAIL_ORDER.forEach(i => detail.appendChild(buildFeatRow(i)));
+}
+
+function updateFeatures(raw, norm) {
+  const now = new Date();
+  document.getElementById('features-ts').textContent =
+    now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  for (let idx = 0; idx < 15; idx++) {
+    const valEl  = document.getElementById(`fv-${idx}`);
+    const barEl  = document.getElementById(`fb-${idx}`);
+    const normEl = document.getElementById(`fn-${idx}`);
+    if (!valEl) continue;
+
+    const m = FEAT_META[idx];
+    const v = raw[idx];
+
+    // Raw value (always shown)
+    valEl.textContent = `${(v * m.scale).toFixed(m.dec)}${m.unit ? '\u00a0' + m.unit : ''}`;
+
+    if (norm === null) {
+      // No baseline yet — bar at center, neutral
+      barEl.style.width      = '50%';
+      barEl.style.background = '#e2e8f0';
+      normEl.style.color     = '#94a3b8';
+      normEl.textContent     = '--';
+    } else {
+      const n = norm[idx];
+      barEl.style.width = `${Math.min(Math.max(n / 2.0, 0), 1) * 100}%`;
+      const dev = Math.abs(n - 1.0);
+      if (dev < 0.15)      { barEl.style.background = '#10b981'; normEl.style.color = '#059669'; }
+      else if (dev < 0.40) { barEl.style.background = '#f59e0b'; normEl.style.color = '#d97706'; }
+      else                 { barEl.style.background = '#ef4444'; normEl.style.color = '#dc2626'; }
+      normEl.textContent = `×${n.toFixed(2)}`;
+    }
+  }
+}
+
+initFeaturesPanel();
+
+// ─── Stress display ──────────────────────────────────────────────────────────
+function onStress(msg) {
+  const panel   = document.getElementById('stress-panel');
+  const stateEl = document.getElementById('stress-state');
+  const probEl  = document.getElementById('stress-prob-val');
+  const hintEl  = document.getElementById('stress-hint');
+
+  const pct   = Math.round(msg.prob * 100);
+  const cls   = msg.is_stress ? 'stress' : 'calm';
+  const label = msg.is_stress ? 'STRESS' : 'CALM';
+
+  panel.className   = cls;
+  stateEl.className = cls;
+  probEl.className  = cls;
+
+  stateEl.textContent = label;
+  probEl.textContent  = `${pct}%`;
+  hintEl.textContent  = 'Last 60 s · 5 s updates';
+
+  if (msg.raw && msg.norm) updateFeatures(msg.raw, msg.norm);
+
+  // Accumulate stress point for timeline
+  stressPoints.push({ ts: Date.now(), prob: msg.prob });
+  if (stressPoints.length > 20000) stressPoints.shift();
+  drawTimeline();
+
+  // Update current event label in stress panel
+  if ('current_event' in msg) {
+    const evEl = document.getElementById('stress-event');
+    if (evEl) evEl.textContent = msg.current_event ? `◆ ${msg.current_event.title}` : '';
+  }
+}
+
+// ─── Stress Timeline ──────────────────────────────────────────────────────────
+
+let stressPoints = [];   // {ts: unix_ms, prob: 0-1}
+let todayEvents  = [];   // {id, title, start, end, startTs, endTs, color}
+let calConnected = false;
+
+const EV_COLORS = [
+  { bg: 'rgba(92,107,192,0.10)',  border: 'rgba(92,107,192,0.55)',  label: '#5c6bc0' },
+  { bg: 'rgba(38,166,154,0.10)',  border: 'rgba(38,166,154,0.55)',  label: '#26a69a' },
+  { bg: 'rgba(239,108,0,0.10)',   border: 'rgba(239,108,0,0.55)',   label: '#ef6c00' },
+  { bg: 'rgba(156,39,176,0.10)',  border: 'rgba(156,39,176,0.55)',  label: '#9c27b0' },
+  { bg: 'rgba(67,160,71,0.10)',   border: 'rgba(67,160,71,0.55)',   label: '#43a047' },
+];
+
+const tlCanvas = document.getElementById('stress-timeline');
+const tlCtx    = tlCanvas.getContext('2d');
+const TL_W = Math.min(window.innerWidth - 32, 1300);
+const TL_H = 220;
+const PAD_L = 46, PAD_R = 12, PAD_T = 22, PAD_B = 34;
+tlCanvas.width  = TL_W;
+tlCanvas.height = TL_H;
+
+let _tlRange = { tMin: 0, tMax: 1 };
+
+function getTimeRange() {
+  const nowS = Date.now() / 1000;
+  // Default: show today from 8:00 to now+30min (or 20:00 min)
+  const today8 = new Date(); today8.setHours(8,0,0,0);
+  let tMin = today8.getTime() / 1000;
+  let tMax = Math.max(nowS + 1800, today8.getTime() / 1000 + 3600 * 8);
+
+  if (stressPoints.length > 0)
+    tMin = Math.min(tMin, stressPoints[0].ts / 1000 - 900);
+  for (const ev of todayEvents) {
+    tMin = Math.min(tMin, ev.startTs - 900);
+    tMax = Math.max(tMax, ev.endTs   + 900);
+  }
+  tMax = Math.max(tMax, nowS + 900);
+  return { tMin, tMax };
+}
+
+function tsToX(ts) {
+  const { tMin, tMax } = _tlRange;
+  return PAD_L + (ts - tMin) / (tMax - tMin) * (TL_W - PAD_L - PAD_R);
+}
+function xToTs(x) {
+  const { tMin, tMax } = _tlRange;
+  return tMin + (x - PAD_L) / (TL_W - PAD_L - PAD_R) * (tMax - tMin);
+}
+function probToY(p) {
+  return TL_H - PAD_B - p * (TL_H - PAD_T - PAD_B);
+}
+
+function drawTimeline() {
+  _tlRange = getTimeRange();
+  const { tMin, tMax } = _tlRange;
+  const chartW = TL_W - PAD_L - PAD_R;
+  const chartH = TL_H - PAD_T - PAD_B;
+
+  tlCtx.fillStyle = '#ffffff';
+  tlCtx.fillRect(0, 0, TL_W, TL_H);
+
+  // ── Event background zones ──────────────────────────────────────────────────
+  for (const ev of todayEvents) {
+    const x1 = Math.max(tsToX(ev.startTs), PAD_L);
+    const x2 = Math.min(tsToX(ev.endTs),   TL_W - PAD_R);
+    if (x2 <= x1) continue;
+
+    tlCtx.fillStyle = ev.color.bg;
+    tlCtx.fillRect(x1, PAD_T, x2 - x1, chartH);
+
+    tlCtx.save();
+    tlCtx.strokeStyle = ev.color.border;
+    tlCtx.lineWidth = 1;
+    tlCtx.setLineDash([3, 4]);
+    tlCtx.beginPath();
+    tlCtx.moveTo(x1, PAD_T); tlCtx.lineTo(x1, TL_H - PAD_B);
+    tlCtx.stroke();
+    tlCtx.restore();
+
+    if (x2 - x1 > 24) {
+      tlCtx.fillStyle = ev.color.label;
+      tlCtx.font = '10px system-ui';
+      tlCtx.textAlign = 'left';
+      const maxChars = Math.floor((x2 - x1 - 6) / 6.5);
+      const label = ev.title.length > maxChars ? ev.title.slice(0, maxChars - 1) + '…' : ev.title;
+      tlCtx.fillText(label, x1 + 4, PAD_T + 13);
+    }
+  }
+
+  // ── Horizontal grid & Y labels ──────────────────────────────────────────────
+  [0, 0.25, 0.5, 0.75, 1.0].forEach(p => {
+    const y = probToY(p);
+    tlCtx.strokeStyle = p === 0.5 ? '#e8edf5' : '#f4f6fb';
+    tlCtx.lineWidth = 0.5;
+    tlCtx.beginPath();
+    tlCtx.moveTo(PAD_L, y); tlCtx.lineTo(TL_W - PAD_R, y);
+    tlCtx.stroke();
+    tlCtx.fillStyle = '#94a3b8';
+    tlCtx.font = '10px system-ui';
+    tlCtx.textAlign = 'right';
+    tlCtx.fillText(`${Math.round(p * 100)}%`, PAD_L - 5, y + 3.5);
+  });
+
+  // ── Time axis ticks & labels ─────────────────────────────────────────────────
+  const rangeH = (tMax - tMin) / 3600;
+  const tickSec = rangeH <= 3 ? 900 : rangeH <= 6 ? 1800 : 3600;
+  const firstTick = Math.ceil(tMin / tickSec) * tickSec;
+  tlCtx.fillStyle = '#64748b';
+  tlCtx.font = '10px system-ui';
+  tlCtx.textAlign = 'center';
+  for (let t = firstTick; t <= tMax; t += tickSec) {
+    const x = tsToX(t);
+    if (x < PAD_L || x > TL_W - PAD_R) continue;
+    tlCtx.strokeStyle = '#f1f5f9';
+    tlCtx.lineWidth = 0.4;
+    tlCtx.beginPath();
+    tlCtx.moveTo(x, PAD_T); tlCtx.lineTo(x, TL_H - PAD_B);
+    tlCtx.stroke();
+    const d = new Date(t * 1000);
+    tlCtx.fillText(
+      d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      x, TL_H - PAD_B + 14
+    );
+  }
+
+  // ── "NOW" cursor ─────────────────────────────────────────────────────────────
+  const nowX = tsToX(Date.now() / 1000);
+  if (nowX >= PAD_L && nowX <= TL_W - PAD_R) {
+    tlCtx.save();
+    tlCtx.strokeStyle = '#6366f1';
+    tlCtx.lineWidth = 1;
+    tlCtx.setLineDash([4, 5]);
+    tlCtx.beginPath();
+    tlCtx.moveTo(nowX, PAD_T); tlCtx.lineTo(nowX, TL_H - PAD_B);
+    tlCtx.stroke();
+    tlCtx.restore();
+    tlCtx.fillStyle = '#6366f1';
+    tlCtx.font = '9px system-ui';
+    tlCtx.textAlign = 'center';
+    tlCtx.fillText('NOW', nowX, PAD_T - 6);
+  }
+
+  // ── Stress line (gap-aware) ───────────────────────────────────────────────
+  const GAP_MS = 30_000; // treat gaps > 30s as breaks in the line
+  function getSegments(pts) {
+    if (pts.length === 0) return [];
+    const segs = []; let seg = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+      if (pts[i].ts - pts[i-1].ts > GAP_MS) { segs.push(seg); seg = [pts[i]]; }
+      else seg.push(pts[i]);
+    }
+    segs.push(seg);
+    return segs;
+  }
+
+  if (stressPoints.length >= 1) {
+    const segs = getSegments(stressPoints);
+
+    // Filled area — one polygon per segment
+    tlCtx.fillStyle = 'rgba(16,185,129,0.08)';
+    for (const seg of segs) {
+      if (seg.length < 2) continue;
+      tlCtx.beginPath();
+      tlCtx.moveTo(tsToX(seg[0].ts / 1000), TL_H - PAD_B);
+      for (const p of seg) tlCtx.lineTo(tsToX(p.ts / 1000), probToY(p.prob));
+      tlCtx.lineTo(tsToX(seg[seg.length - 1].ts / 1000), TL_H - PAD_B);
+      tlCtx.closePath();
+      tlCtx.fill();
+    }
+
+    // Line — moveTo at each segment start (gap = no connection)
+    tlCtx.beginPath();
+    tlCtx.strokeStyle = '#10b981';
+    tlCtx.lineWidth = 1.5;
+    tlCtx.lineJoin = 'round';
+    for (const seg of segs) {
+      tlCtx.moveTo(tsToX(seg[0].ts / 1000), probToY(seg[0].prob));
+      for (let i = 1; i < seg.length; i++)
+        tlCtx.lineTo(tsToX(seg[i].ts / 1000), probToY(seg[i].prob));
+    }
+    tlCtx.stroke();
+
+    // Latest dot
+    const lp = stressPoints[stressPoints.length - 1];
+    tlCtx.beginPath();
+    tlCtx.arc(tsToX(lp.ts / 1000), probToY(lp.prob), 3.5, 0, Math.PI * 2);
+    tlCtx.fillStyle = '#10b981';
+    tlCtx.fill();
+  } else {
+    tlCtx.fillStyle = '#94a3b8';
+    tlCtx.font = '13px system-ui';
+    tlCtx.textAlign = 'center';
+    tlCtx.fillText('Data accumulates after calibration', TL_W / 2, TL_H / 2 + 4);
+  }
+
+  // ── Axes border ───────────────────────────────────────────────────────────────
+  tlCtx.strokeStyle = '#cbd5e1';
+  tlCtx.lineWidth = 1;
+  tlCtx.beginPath();
+  tlCtx.moveTo(PAD_L, PAD_T); tlCtx.lineTo(PAD_L, TL_H - PAD_B);
+  tlCtx.lineTo(TL_W - PAD_R, TL_H - PAD_B);
+  tlCtx.stroke();
+}
+
+setInterval(drawTimeline, 5000);
+drawTimeline();
+
+// ── Click / hover on event zones ───────────────────────────────────────────────
+tlCanvas.addEventListener('mousemove', (e) => {
+  const scaleX = TL_W / (tlCanvas.offsetWidth || TL_W);
+  const ts = xToTs(e.offsetX * scaleX);
+  tlCanvas.style.cursor = todayEvents.some(ev => ev.startTs <= ts && ts <= ev.endTs)
+    ? 'pointer' : 'default';
+});
+
+tlCanvas.addEventListener('click', (e) => {
+  const scaleX = TL_W / (tlCanvas.offsetWidth || TL_W);
+  const scaleY = TL_H / (tlCanvas.offsetHeight || TL_H);
+  const canvasX = e.offsetX * scaleX;
+  const clickedTs = xToTs(canvasX);
+
+  for (const ev of todayEvents) {
+    if (ev.startTs <= clickedTs && clickedTs <= ev.endTs) {
+      showEventCard(ev, e.offsetX, e.offsetY);
+      return;
+    }
+  }
+  closeEventCard();
+});
+
+async function showEventCard(ev, cssX, cssY) {
+  const card = document.getElementById('event-detail-card');
+
+  // Reset to loading state
+  document.getElementById('ed-title').textContent     = ev.title;
+  const s = new Date(ev.startTs * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  const e2 = new Date(ev.endTs   * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  document.getElementById('ed-time').textContent      = `${s} – ${e2}`;
+  document.getElementById('ed-avg-stress').textContent  = '--';
+  document.getElementById('ed-peak-stress').textContent = '--';
+  document.getElementById('ed-avg-hr').textContent      = '--';
+  document.getElementById('ed-avg-rmssd').textContent   = '--';
+
+  // Position (CSS pixel coords relative to canvas element)
+  const cardW = 290, cardH = 230;
+  let left = cssX + 12, top = cssY + 12;
+  if (left + cardW > tlCanvas.offsetWidth)  left = Math.max(0, cssX - cardW - 4);
+  if (top  + cardH > tlCanvas.offsetHeight) top  = Math.max(0, cssY - cardH - 4);
+  card.style.left = left + 'px';
+  card.style.top  = top  + 'px';
+  card.style.display = 'block';
+
+  // Fetch stats
+  try {
+    const r = await fetch(`/api/insights/event_stats?start=${ev.startTs}&end=${ev.endTs}`);
+    const stats = await r.json();
+    if (stats) {
+      document.getElementById('ed-avg-stress').textContent  = stats.avg_stress  != null ? `${stats.avg_stress}%`  : '--';
+      document.getElementById('ed-peak-stress').textContent = stats.peak_stress != null ? `${stats.peak_stress}%` : '--';
+      document.getElementById('ed-avg-hr').textContent      = stats.avg_hr      != null ? `${stats.avg_hr} bpm`   : '--';
+      document.getElementById('ed-avg-rmssd').textContent   = stats.avg_rmssd   != null ? `${stats.avg_rmssd} ms` : '--';
+      if (stats.trend && stats.trend.length >= 2) drawMiniTrend(stats.trend, ev.color);
+    }
+  } catch (_) {}
+}
+
+function closeEventCard() {
+  document.getElementById('event-detail-card').style.display = 'none';
+}
+
+function drawMiniTrend(trend, color) {
+  const c = document.getElementById('ed-trend-canvas');
+  const ctx = c.getContext('2d');
+  const W = c.offsetWidth || 240, H = 44;
+  c.width = W; c.height = H;
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(0, 0, W, H);
+  if (trend.length < 2) return;
+  const t0 = trend[0][0], t1 = trend[trend.length - 1][0], tRange = t1 - t0 || 1;
+  ctx.beginPath();
+  ctx.strokeStyle = color ? color.border : '#10b981';
+  ctx.lineWidth = 1.5;
+  ctx.lineJoin = 'round';
+  for (let i = 0; i < trend.length; i++) {
+    const x = (trend[i][0] - t0) / tRange * W;
+    const y = H - (trend[i][1] / 100) * H;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+}
+
+// ── Google Calendar: connect & poll ──────────────────────────────────────────
+
+async function connectGoogleCalendar() {
+  try {
+    const r = await fetch('/api/calendar/connect', { method: 'POST' });
+    const d = await r.json();
+    window.location.href = d.auth_url;
+  } catch (e) { console.error('Calendar connect error:', e); }
+}
+
+async function fetchTodayEvents() {
+  try {
+    const r = await fetch('/api/calendar/today');
+    const events = await r.json();
+    todayEvents = events.map((ev, i) => ({
+      ...ev,
+      startTs: new Date(ev.start).getTime() / 1000,
+      endTs:   new Date(ev.end).getTime()   / 1000,
+      color:   EV_COLORS[i % EV_COLORS.length],
+    }));
+    drawTimeline();
+  } catch (_) {}
+}
+
+async function pollCalendarStatus() {
+  try {
+    const r = await fetch('/api/calendar/status');
+    const d = await r.json();
+    const dot   = document.getElementById('gcal-dot');
+    const label = document.getElementById('gcal-label');
+    const cbar  = document.getElementById('gcal-connect-bar');
+    const tlLbl = document.getElementById('timeline-cal-label');
+
+    if (d.connected) {
+      dot.className      = 'dot green';
+      label.textContent  = 'Google Calendar: Connected';
+      tlLbl.textContent  = 'Connected';
+      cbar.style.display = 'none';
+      if (!calConnected) { calConnected = true; fetchTodayEvents(); }
+    } else {
+      dot.className      = 'dot';
+      label.textContent  = 'Google Calendar: Not connected';
+      tlLbl.textContent  = 'Not connected';
+      cbar.style.display = 'flex';
+      calConnected = false;
+    }
+  } catch (_) {}
+}
+setInterval(pollCalendarStatus, 10000);
+pollCalendarStatus();
+
+// ── Load today's stress history on startup ────────────────────────────────────
+async function loadInitialStressData() {
+  try {
+    const r = await fetch('/api/logs/today');
+    const logs = await r.json();
+    stressPoints = logs.map(l => ({ ts: l.timestamp * 1000, prob: l.stress_prob }));
+    drawTimeline();
+  } catch (_) {}
+}
+loadInitialStressData();
+
+// ─── Calibration ─────────────────────────────────────────────────────────────
+async function startCalibration() {
+  const btn = document.getElementById('calibrate-btn');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/calibrate/start', { method: 'POST' });
+    if (!r.ok) {
+      btn.disabled = false;
+    }
+  } catch (_) {
+    btn.disabled = false;
+  }
+}
+
+// ─── Connect button ───────────────────────────────────────────────────────────
+async function connectBle() {
+  const btn = document.getElementById('connect-btn');
+  btn.disabled = true;
+  btn.textContent = 'Scanning…';
+  try {
+    await fetch('/api/connect', { method: 'POST' });
+  } catch (_) {}
+}
+
+// ─── BLE status polling ───────────────────────────────────────────────────────
+async function pollBle() {
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    const dot   = document.getElementById('ble-dot');
+    const label = document.getElementById('ble-label');
+    const btn   = document.getElementById('connect-btn');
+
+    if (d.connected) {
+      dot.className     = 'dot green';
+      label.textContent = `Polar H10: ${d.device_name}`;
+      btn.disabled      = true;
+      btn.textContent   = 'Connected';
+    } else if (d.scanning) {
+      dot.className     = 'dot amber';
+      label.textContent = 'Polar H10: Scanning…';
+      btn.disabled      = true;
+      btn.textContent   = 'Scanning…';
+    } else if (d.error) {
+      dot.className     = 'dot red';
+      label.textContent = `Polar H10: ${d.error}`;
+      btn.disabled      = false;
+      btn.textContent   = 'Reconnect';
+    } else {
+      dot.className     = 'dot';
+      label.textContent = 'Polar H10: Disconnected';
+      btn.disabled      = false;
+      btn.textContent   = 'Connect to Polar H10';
+    }
+
+    // Calibration state
+    const calBtn    = document.getElementById('calibrate-btn');
+    const calStatus = document.getElementById('cal-status');
+    const calBarWrap = document.getElementById('cal-bar-wrap');
+    const calBar    = document.getElementById('cal-bar');
+
+    if (d.calibration === 'collecting') {
+      const rem = d.calibration_remaining;
+      const pct = Math.round((1 - rem / 60) * 100);
+      calStatus.textContent  = `Stay calm… ${rem} s remaining`;
+      calStatus.className    = 'active';
+      calBarWrap.style.display = 'block';
+      calBar.style.width     = `${pct}%`;
+      calBtn.disabled        = true;
+    } else if (d.calibration === 'done') {
+      calStatus.textContent  = 'Calibration complete ✓';
+      calStatus.className    = 'done';
+      calBarWrap.style.display = 'none';
+      calBtn.disabled        = true;
+      calBtn.textContent     = 'Calibrated';
+    } else if (d.calibration === 'error') {
+      calStatus.textContent  = 'Error – please retry';
+      calStatus.className    = 'error';
+      calBarWrap.style.display = 'none';
+      calBtn.disabled        = !d.connected;
+      calBtn.textContent     = 'Start Calibration';
+    } else {
+      // idle
+      calStatus.textContent = d.connected
+        ? 'Relax for 1 minute, then press start'
+        : 'Connect Polar H10 first';
+      calStatus.className   = '';
+      calBarWrap.style.display = 'none';
+      calBtn.disabled       = !d.connected;
+    }
+  } catch (_) {}
+}
+setInterval(pollBle, 2000);
+pollBle();
+
+// ─── Start ───────────────────────────────────────────────────────────────────
+connect();
+draw();
+</script>
+</body>
+</html>

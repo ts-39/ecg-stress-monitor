@@ -1,0 +1,45 @@
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# ─── Jupyter ──────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ─── macOS ────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ─── SECRETS — never commit ───────────────────────────────────────────────────
+backend/credentials/*.json
+backend/google_token.json
+
+# ─── Runtime data ─────────────────────────────────────────────────────────────
+backend/stress_log.db
+*.db
+
+# ─── Large / licensed data (download instructions in model/data/README.md) ───
+model/data/WESAD/
+model/data/Dataset/*.json
+model/data/Testing/*.json
+model/prepared_cv_datasets.pkl
+
+# ─── Intermediate model checkpoints (not production) ─────────────────────────
+model/trained_models/
+model/trained_models_lightgbm/
+
+# ─── Editor / IDE ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ─── Misc ─────────────────────────────────────────────────────────────────────
+*.log
